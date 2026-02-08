@@ -1,0 +1,2 @@
+# rpm_deb_downloader
+rpm,debファイルを依存関係を解決しながらダウンロードするダウンローダー
