@@ -1,0 +1,10 @@
+libsolv License
+===============
+
+Copyright (c) 2007-2023 SUSE LLC
+
+libsolv is licensed under the BSD License:
+
+This program is licensed under the BSD license, read LICENSE.BSD for further information.
+
+（詳細は https://github.com/openSUSE/libsolv/blob/master/LICENSE.BSD を参照してください）

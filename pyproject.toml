@@ -1,0 +1,11 @@
+[project]
+name = "rpm-deb-downloader"
+version = "1.0.0"
+description = "Resolve RPM/DEB dependencies and download packages."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+  "requests",
+  "zstandard",
+  "cryptography",
+]

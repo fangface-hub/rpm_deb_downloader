@@ -1,0 +1,68 @@
+name: Build Windows App, Zip and Sign with Cosign (OIDC)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-sign-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: python -m PyInstaller rpm_deb_downloader.spec
+
+      - name: Check bundled solv artifacts
+        run: |
+          $recommended = @(
+            "dist\RpmDebDownloader\tools\bin\solv.py",
+            "dist\RpmDebDownloader\tools\bin\_solv.pyd"
+          )
+          foreach ($path in $recommended) {
+            if (-not (Test-Path $path)) {
+              Write-Warning "Missing optional RPM artifact: $path"
+            }
+          }
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign RpmDebDownloader.exe with OIDC
+        run: cosign sign-blob --yes --output-signature dist/RpmDebDownloader/RpmDebDownloader.exe.sig dist/RpmDebDownloader/RpmDebDownloader.exe
+
+      - name: Create ZIP from dist/RpmDebDownloader
+        run: Compress-Archive -Path dist/RpmDebDownloader -DestinationPath RpmDebDownloader-windows.zip
+
+      - name: Sign ZIP with OIDC
+        run: cosign sign-blob --yes --output-signature RpmDebDownloader-windows.zip.sig RpmDebDownloader-windows.zip
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v5
+        with:
+          name: rpm-deb-downloader-windows-zip
+          path: RpmDebDownloader-windows.zip
+
+      - name: Upload ZIP signature
+        uses: actions/upload-artifact@v5
+        with:
+          name: rpm-deb-downloader-windows-signature
+          path: RpmDebDownloader-windows.zip.sig
