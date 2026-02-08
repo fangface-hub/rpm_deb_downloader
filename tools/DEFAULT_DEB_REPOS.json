@@ -1,0 +1,4 @@
+[
+    "http://ftp.jp.debian.org/debian/dists/bullseye/main/binary-amd64/",
+    "http://ftp.jp.debian.org/debian/dists/bullseye/contrib/binary-amd64/"
+]

@@ -1,0 +1,47 @@
+{
+    "loggingex": {
+        "level": "DEBUG",
+        "enabled": false,
+        "enabled_filehandler": false
+    },
+    "signalex": {
+        "level": "DEBUG",
+        "enabled": false,
+        "enabled_filehandler": true
+    },
+    "downloader": {
+        "level": "DEBUG",
+        "enabled": true,
+        "enabled_filehandler": true
+    },
+    "file_downloader": {
+        "level": "DEBUG",
+        "enabled": true,
+        "enabled_filehandler": true
+    },
+    "package_service": {
+        "level": "DEBUG",
+        "enabled": true,
+        "enabled_filehandler": true
+    },
+    "rpm_resolver": {
+        "level": "DEBUG",
+        "enabled": true,
+        "enabled_filehandler": true
+    },
+    "rpm_service": {
+        "level": "DEBUG",
+        "enabled": true,
+        "enabled_filehandler": true
+    },
+    "deb_service": {
+        "level": "DEBUG",
+        "enabled": true,
+        "enabled_filehandler": true
+    },
+    "rpm_repository_client": {
+        "level": "DEBUG",
+        "enabled": true,
+        "enabled_filehandler": true
+    }
+}

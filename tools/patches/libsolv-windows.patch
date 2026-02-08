@@ -1,0 +1,145 @@
+diff --git a/bindings/python/CMakeLists.txt b/bindings/python/CMakeLists.txt
+index 1e7d7f2..b58a3c0 100644
+--- a/bindings/python/CMakeLists.txt
++++ b/bindings/python/CMakeLists.txt
+@@ -34,7 +34,9 @@ ADD_CUSTOM_COMMAND (
+     DEPENDS ${CMAKE_SOURCE_DIR}/bindings/solv.i
+ )
+ 
+-ADD_DEFINITIONS(-Wno-unused)
++IF (NOT MSVC)
++    ADD_DEFINITIONS(-Wno-unused)
++ENDIF (NOT MSVC)
+ INCLUDE_DIRECTORIES (${PYTHON_INCLUDE_PATH})
+ 
+ ADD_LIBRARY (bindings_python MODULE solv_python.c)
+ SET_TARGET_PROPERTIES (bindings_python PROPERTIES PREFIX "" OUTPUT_NAME "_solv")
+ TARGET_LINK_LIBRARIES (bindings_python ${LIBSOLV_BINDINGS_LIBRARIES} ${SYSTEM_LIBRARIES})
++IF (MSVC AND PYTHON_LIBRARY)
++    GET_FILENAME_COMPONENT(PYTHON_LIBRARY_DIR "${PYTHON_LIBRARY}" DIRECTORY)
++    TARGET_LINK_DIRECTORIES(bindings_python PRIVATE "${PYTHON_LIBRARY_DIR}")
++ENDIF (MSVC AND PYTHON_LIBRARY)
+ INSTALL (TARGETS bindings_python LIBRARY DESTINATION ${PYTHON_INSTALL_DIR})
+ INSTALL (FILES ${CMAKE_CURRENT_BINARY_DIR}/solv.py DESTINATION ${PYTHON_INSTALL_DIR})
+
+diff --git a/bindings/solv.i b/bindings/solv.i
+index 8a29a6d..e0f2d10 100644
+--- a/bindings/solv.i
++++ b/bindings/solv.i
+@@ -968,12 +968,44 @@
+ %{ 
+ #include <stdbool.h>
+ #include <stdio.h>
++#include <string.h>
+ #include <sys/stat.h>
+-#include <sys/utsname.h>
+ #include <sys/types.h>
+-#include <unistd.h>
+ #include <fcntl.h>
++
++#ifdef _WIN32
++#include <io.h>
++#include <windows.h>
++
++struct utsname {
++  char machine[128];
++};
++
++static int uname(struct utsname *un)
++{
++  SYSTEM_INFO info;
++  const char *arch = "x86_64";
++
++  if (!un)
++    return -1;
++
++  GetNativeSystemInfo(&info);
++  switch (info.wProcessorArchitecture)
++    {
++    case PROCESSOR_ARCHITECTURE_AMD64:
++      arch = "x86_64";
++      break;
++    case PROCESSOR_ARCHITECTURE_INTEL:
++      arch = "i686";
++      break;
++    case PROCESSOR_ARCHITECTURE_ARM64:
++      arch = "aarch64";
++      break;
++    default:
++      arch = "x86_64";
++    }
++
++  strncpy(un->machine, arch, sizeof(un->machine) - 1);
++  un->machine[sizeof(un->machine) - 1] = '\0';
++  return 0;
++}
++#else
++#include <sys/utsname.h>
++#include <unistd.h>
++#endif
+@@ -1043,7 +1075,9 @@
+-#include "repo_updateinfoxml.h"
++#ifndef _WIN32
++#include "repo_updateinfoxml.h"
++#endif
+@@ -2669,9 +2703,6 @@
+-  bool add_updateinfoxml(FILE *fp, int flags = 0) {
+-    return repo_add_updateinfoxml($self, fp, flags) == 0;
+-  }
+
+diff --git a/ext/CMakeLists.txt b/ext/CMakeLists.txt
+index 57f90e8..d9a1d2c 100644
+--- a/ext/CMakeLists.txt
++++ b/ext/CMakeLists.txt
+@@ -27,12 +27,16 @@ ENDIF (ENABLE_PGPVRFY)
+ 
+ IF (ENABLE_RPMMD)
+     SET (libsolvext_SRCS ${libsolvext_SRCS}
+         repo_repomdxml.c repo_rpmmd.c
+-        repo_deltainfoxml.c repo_updateinfoxml.c)
++        repo_deltainfoxml.c)
+     SET (libsolvext_HEADERS ${libsolvext_HEADERS}
+         repo_repomdxml.h repo_rpmmd.h
+-        repo_deltainfoxml.h repo_updateinfoxml.h)
++        repo_deltainfoxml.h)
++    IF (NOT WIN32)
++        SET (libsolvext_SRCS ${libsolvext_SRCS} repo_updateinfoxml.c)
++        SET (libsolvext_HEADERS ${libsolvext_HEADERS} repo_updateinfoxml.h)
++    ENDIF (NOT WIN32)
+ ENDIF (ENABLE_RPMMD)
+
+diff --git a/ext/libsolvext.ver b/ext/libsolvext.ver
+index 3b8d6b6..b2f1d2e 100644
+--- a/ext/libsolvext.ver
++++ b/ext/libsolvext.ver
+@@ -40,7 +40,6 @@ LIBSOLVEXT_1.0 {
+         repo_add_deltainfoxml;
+         repo_add_repomdxml;
+         repo_add_rpmmd;
+-        repo_add_updateinfoxml;
+         repo_add_susetags;
+         repo_add_susetags_content;
+         repo_add_susetags_products;
+
+diff --git a/tools/CMakeLists.txt b/tools/CMakeLists.txt
+index 9f7c1dd..5b3b3ea 100644
+--- a/tools/CMakeLists.txt
++++ b/tools/CMakeLists.txt
+@@ -44,10 +44,14 @@ IF (ENABLE_RPMMD)
+ ADD_EXECUTABLE (repomdxml2solv repomdxml2solv.c)
+ TARGET_LINK_LIBRARIES (repomdxml2solv toolstuff ${LIBSOLV_TOOLS_LIBRARIES} ${SYSTEM_LIBRARIES})
+ ADD_EXECUTABLE (rpmmd2solv rpmmd2solv.c)
+ TARGET_LINK_LIBRARIES (rpmmd2solv toolstuff ${LIBSOLV_TOOLS_LIBRARIES} ${SYSTEM_LIBRARIES})
+-ADD_EXECUTABLE (updateinfoxml2solv updateinfoxml2solv.c)
+-TARGET_LINK_LIBRARIES (updateinfoxml2solv toolstuff ${LIBSOLV_TOOLS_LIBRARIES} ${SYSTEM_LIBRARIES})
+ ADD_EXECUTABLE (deltainfoxml2solv deltainfoxml2solv.c)
+ TARGET_LINK_LIBRARIES (deltainfoxml2solv toolstuff ${LIBSOLV_TOOLS_LIBRARIES} ${SYSTEM_LIBRARIES})
+-SET (tools_list ${tools_list} repomdxml2solv rpmmd2solv updateinfoxml2solv deltainfoxml2solv)
++IF (NOT WIN32)
++ADD_EXECUTABLE (updateinfoxml2solv updateinfoxml2solv.c)
++TARGET_LINK_LIBRARIES (updateinfoxml2solv toolstuff ${LIBSOLV_TOOLS_LIBRARIES} ${SYSTEM_LIBRARIES})
++SET (tools_list ${tools_list} repomdxml2solv rpmmd2solv updateinfoxml2solv deltainfoxml2solv)
++ELSE (NOT WIN32)
++SET (tools_list ${tools_list} repomdxml2solv rpmmd2solv deltainfoxml2solv)
++ENDIF (NOT WIN32)
+ ENDIF (ENABLE_RPMMD)
