@@ -42,7 +42,8 @@ jobs:
         run: |
           $recommended = @(
             "dist\RpmDebDownloader\tools\bin\solv.py",
-            "dist\RpmDebDownloader\tools\bin\_solv.pyd"
+            "dist\RpmDebDownloader\tools\bin\solv.dll",
+            "dist\RpmDebDownloader\tools\bin\solvext.dll"
           )
           foreach ($path in $recommended) {
             if (-not (Test-Path $path)) {

@@ -14,9 +14,6 @@ extra_binaries = []
 if os.path.isfile('tools/bin/solv.py'):
     extra_datas.append(('tools/bin/solv.py', 'tools/bin'))
 
-if os.path.isfile('tools/bin/_solv.pyd'):
-    extra_binaries.append(('tools/bin/_solv.pyd', 'tools/bin'))
-
 tools_tree = Tree('tools', prefix='tools')
 licenses_tree = Tree('Licenses', prefix='Licenses')
 locales_tree = Tree('locales', prefix='locales')

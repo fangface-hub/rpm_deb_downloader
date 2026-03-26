@@ -95,7 +95,7 @@ Copy-Item "$install\bin\solv.dll" $platlib -Force
 Copy-Item "$install\bin\solvext.dll" $platlib -Force
 Copy-Item "C:\Users\<you>\Documents\vcpkg\installed\x64-windows\bin\libexpat.dll" $platlib -Force
 Copy-Item "C:\Users\<you>\Documents\vcpkg\installed\x64-windows\bin\zlib1.dll" $platlib -Force
-if (Test-Path "$platlib\_solv.dll") { Rename-Item "$platlib\_solv.dll" _solv.pyd -Force }
+Copy-Item "$platlib\solv.py" "C:\Users\<you>\Documents\rpm_deb_downloader\tools\bin\solv.py" -Force
 
 # make rpmmd2solv available to the app (fallback when bindings lack add_rpmmd)
 Copy-Item "$install\bin\rpmmd2solv.exe" "C:\Users\<you>\Documents\rpm_deb_downloader\tools\bin\rpmmd2solv.exe" -Force
@@ -110,7 +110,7 @@ $py -c "import solv; print(solv)"
 ### Bundled build artifacts in this repository
 
 This repository already includes Windows build artifacts under `tools/`, so other
-developers can run the app without rebuilding libsolv/python-solv immediately.
+developers can run the app without rebuilding libsolv immediately.
 
 `tools/bin/*` は Git LFS 管理です。CI では `actions/checkout` に
 `with: lfs: true` を設定し、ローカル clone でも `git lfs pull` を実行して
@@ -119,11 +119,13 @@ developers can run the app without rebuilding libsolv/python-solv immediately.
 - `tools/bin/rpmmd2solv.exe`
 - `tools/bin/solv.dll`
 - `tools/bin/solvext.dll`
-- `tools/bin/solv.py`
-- `tools/bin/_solv.pyd` (Python ABI must match bundled Python, e.g. CPython 3.13)
+- `tools/bin/solv.py` (`ctypes` で `solv.dll` / `solvext.dll` を直接呼び出す)
 - `tools/bin/libexpat.dll`
 - `tools/bin/zlib1.dll`
 - `tools/patches/libsolv-windows.patch` (patch used for the Windows build)
+
+このアプリでは `_solv.pyd` / `_solv.dll` は不要です。RPM の依存解決は
+`tools/bin/solv.py` から `solv.dll` と `solvext.dll` を直接読み込みます。
 
 ### Updating bundled artifacts
 

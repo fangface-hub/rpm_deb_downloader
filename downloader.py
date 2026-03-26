@@ -105,11 +105,11 @@ def run(
                 try:
                     from rpm_service import RpmService
                 except ModuleNotFoundError as second_ex:
-                    if second_ex.name in ("solv", "_solv"):
-                        raise RuntimeError(
-                            "RPM機能に必要な 'solv' / '_solv' モジュールが見つかりません。"
-                            " python-solvのWindowsビルド成果物（solv.py / _solv.pyd）"
-                            "を同梱してください。") from second_ex
+                    if second_ex.name == "solv":
+                        raise RuntimeError("RPM機能に必要な 'solv' モジュールが見つかりません。"
+                                           " libsolvのWindowsビルド成果物"
+                                           "（solv.py / solv.dll / solvext.dll）"
+                                           "を同梱してください。") from second_ex
                     raise
                 except SyntaxError as second_ex:
                     broken_candidates = [
