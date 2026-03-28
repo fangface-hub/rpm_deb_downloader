@@ -153,3 +153,7 @@ Minimal update workflow:
 - RPM repodata compression can be `.gz`, `.xz`, or `.zst` (requires `zstandard`).
 - DEB dependency resolution is a simple parser for `Depends:` fields and does not handle virtual packages.
 - Proxy settings rely on environment variables `HTTP_PROXY` and `HTTPS_PROXY`.
+
+## Sponsor
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/fangface-hub)
