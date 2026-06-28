@@ -7,21 +7,19 @@ Resolve RPM and DEB dependencies and download packages on Windows using Python a
 1. Create a virtual environment and install dependencies:
 
 ```bash
-python -m venv .venv
-.venv\\Scripts\\activate
-pip install -r requirements.txt
+uv sync
 ```
 
 1. Run a dry run first:
 
 ```bash
-python .\main_window.py
+uv run python .\main_window.py
 ```
 
 ## Usage
 
 ```bash
-python .\main_window.py
+uv run python .\main_window.py
 ```
 
 Windows では既定のデータディレクトリとして `%USERPROFILE%\Documents\RpmDebDownloader` を使います。
@@ -47,17 +45,14 @@ PyInstaller の代わりに Nuitka を使って Windows 向けの配布物を生
 
 ### Release prerequisites
 
-- Python from python.org (x64) matching your venv version
+- Python from python.org (x64) 3.14
 - LLVM/Clang for Windows (`clang-cl` in `PATH`)
 - Visual Studio Build Tools 2022 (MSVC linker + Windows SDK)
 
 ### Build setup
 
 ```powershell
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-pip install -e .[build]
+uv sync --extra build
 ```
 
 ### Build command
@@ -130,7 +125,7 @@ libsolv + SWIG and install into your venv.
 - Ninja (in PATH)
 - Git (in PATH)
 - SWIG (in PATH)
-- Python from python.org (x64) that matches your venv version
+- Python from python.org (x64) 3.14
 
 ### Build steps (PowerShell)
 
@@ -151,8 +146,7 @@ cd libsolv
 git apply C:\Users\<you>\Documents\rpm_deb_downloader\tools\patches\libsolv-windows.patch
 
 # paths
-$venv = "C:\Users\<you>\Documents\rpm_deb_downloader\.venv"
-$py = "$venv\Scripts\python.exe"
+$py = (uv run python -c "import sys; print(sys.executable)").Trim()
 $platlib = & $py -c "import sysconfig; print(sysconfig.get_path('platlib'))"
 $swig = (Get-Command swig).Source
 
@@ -170,8 +164,8 @@ cmake -S $src -B $build -G "Ninja" `
     -DWITHOUT_COOKIEOPEN=ON -DENABLE_PYTHON=ON `
     -DSWIG_EXECUTABLE=$swig `
     -DPYTHON_EXECUTABLE=$py `
-    -DPYTHON_LIBRARY=C:\Python313\libs\python313.lib `
-    -DPYTHON_INCLUDE_DIR=C:\Python313\include
+    -DPYTHON_LIBRARY=C:\Python314\libs\python314.lib `
+    -DPYTHON_INCLUDE_DIR=C:\Python314\include
 
 cmake --build $build
 cmake --install $build
@@ -229,15 +223,15 @@ Recommended metadata to record:
 
 - libsolv source revision (tag or commit SHA)
 - SWIG version
-- Python version and architecture (for example `3.13 x64`)
+- Python version and architecture (for example `3.14 x64`)
 - vcpkg revision and `zlib`/`expat` package versions
 
 Minimal update workflow:
 
 1. Rebuild with the steps above using the target Python version.
 1. Replace files in `tools/bin/` with the newly built binaries.
-1. Run a smoke test: `python .\main_window.py`.
-1. Run import test: `python -c "import solv; print(solv)"`.
+1. Run a smoke test: `uv run python .\main_window.py`.
+1. Run import test: `uv run python -c "import solv; print(solv)"`.
 1. Run Nuitka smoke test: `.\dist\RpmDebDownloader.exe`.
 1. Commit binaries and documentation updates together.
 
