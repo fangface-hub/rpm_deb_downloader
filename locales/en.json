@@ -70,5 +70,8 @@
   "cancel": "Cancel",
   "locale_settings": "Language Settings",
   "select_language": "Select language:",
-  "restart_required": "Language setting will be fully applied after restart"
+  "restart_required": "Language setting will be fully applied after restart",
+  "data_dir_title": "Confirm Data Directory",
+  "data_dir_use_default": "Use the default data directory {path}?",
+  "data_dir_select": "Select Data Directory"
 }

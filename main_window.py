@@ -17,9 +17,12 @@ from urllib.parse import quote
 
 from downloader import run
 from i18n import I18n
+from loggingex import set_log_directory
 from package_json_editor_window import PackageJsonEditorWindow
 from package_service import PackageRequest, ServiceRepo, ServiceType
-from pathlibex import get_app_dir, get_data_dir, get_documents_dir
+from pathlibex import (get_app_dir, get_data_dir, get_default_data_dir,
+                       get_documents_dir, get_existing_settings_file_path,
+                       get_settings_file_path)
 from proxy_settings_dialog import ProxySettingsDialog
 from repo_json_editor_window import RepoJsonEditorWindow
 from tkinterex import CustomCheckbutton, CustomCombobox, CustomEntry
@@ -405,6 +408,9 @@ class MainWindow(tk.Tk):
         self._last_output_dir: str | None = None
         self._last_repo_new_dir: str | None = None
         self._last_package_file_dir: str | None = None
+        self._data_dir = str(get_default_data_dir())
+        self._data_dir_initialized = False
+        self._has_saved_data_dir = False
         self._stream_capture = StreamCaptureManager(self._append_stdout,
                                                     self._append_stderr)
 
@@ -416,6 +422,7 @@ class MainWindow(tk.Tk):
         self.proxy_username_entry = CustomEntry(self)
         self.proxy_password_entry = CustomEntry(self, show="*")
         self.load_settings()
+        self.ensure_data_directory_selected()
         self.toggle_proxy_fields()
 
         self.arch_combobox.var.trace_add(
@@ -438,7 +445,7 @@ class MainWindow(tk.Tk):
 
     def _load_saved_locale(self) -> str | None:
         """保存済みロケールを設定ファイルから読み込む."""
-        settings_file = get_data_dir() / "settings.json"
+        settings_file = get_existing_settings_file_path()
         if not settings_file.exists():
             return None
 
@@ -605,14 +612,16 @@ class MainWindow(tk.Tk):
         """設定を設定ファイルへ保存する."""
         encrypted_password = self._encrypt_password(
             self.proxy_password_entry.value, )
+        data_dir = getattr(self, "_data_dir", get_default_data_dir())
         settings = {
             "use_proxy": self.use_proxy_checkbox.value,
             "proxy_url": self.proxy_url_entry.value,
             "proxy_username": self.proxy_username_entry.value,
             "proxy_password_encrypted": encrypted_password,
             "locale": self.i18n.get_current_language(),
+            "data_dir": str(data_dir),
         }
-        settings_file = get_data_dir() / "settings.json"
+        settings_file = get_settings_file_path()
         try:
             settings_file.parent.mkdir(parents=True, exist_ok=True)
             with open(settings_file, "w", encoding="utf-8") as f:
@@ -628,8 +637,10 @@ class MainWindow(tk.Tk):
 
     def load_settings(self) -> None:
         """設定ファイルから設定を読み込む."""
-        settings_file = get_data_dir() / "settings.json"
+        settings_file = get_existing_settings_file_path()
         if not settings_file.exists():
+            self._data_dir = get_default_data_dir()
+            self._has_saved_data_dir = False
             return
 
         try:
@@ -655,6 +666,46 @@ class MainWindow(tk.Tk):
         locale_value = settings.get("locale")
         if isinstance(locale_value, str) and locale_value.strip():
             self.i18n.change_language(locale_value.strip())
+
+        data_dir_value = settings.get("data_dir")
+        if isinstance(data_dir_value, str) and data_dir_value.strip():
+            self._data_dir = os.path.normpath(data_dir_value.strip())
+            self._has_saved_data_dir = True
+        else:
+            self._data_dir = get_default_data_dir()
+            self._has_saved_data_dir = False
+
+    def ensure_data_directory_selected(self) -> None:
+        """初回起動時にデータディレクトリを確定する."""
+        if self._data_dir_initialized:
+            return
+
+        if self._has_saved_data_dir:
+            self._data_dir_initialized = True
+            return
+
+        message = self.i18n.t("data_dir_use_default",
+                              path=get_default_data_dir())
+        use_default = messagebox.askyesno(self.i18n.t("data_dir_title"),
+                                          message)
+        if use_default:
+            selected_dir = get_default_data_dir()
+        else:
+            selected_dir = filedialog.askdirectory(
+                title=self.i18n.t("data_dir_select"),
+                initialdir=str(get_default_data_dir()),
+            )
+            if not selected_dir:
+                selected_dir = str(get_default_data_dir())
+
+        self._apply_data_directory(selected_dir)
+        self._data_dir_initialized = True
+
+    def _apply_data_directory(self, data_dir) -> None:
+        """データディレクトリを反映して保存する."""
+        self._data_dir = str(data_dir)
+        self.save_settings(show_message=False)
+        set_log_directory()
 
     def can_run(self) -> bool:
         """実行可能な入力状態かを返す."""

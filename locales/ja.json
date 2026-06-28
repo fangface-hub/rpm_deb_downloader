@@ -71,4 +71,7 @@
   ,"locale_settings": "言語設定"
   ,"select_language": "言語を選択:"
   ,"restart_required": "言語設定は再起動後に完全反映されます"
+  ,"data_dir_title": "データディレクトリの確認"
+  ,"data_dir_use_default": "既定のデータディレクトリ {path} を使用しますか？"
+  ,"data_dir_select": "データディレクトリを選択"
 }

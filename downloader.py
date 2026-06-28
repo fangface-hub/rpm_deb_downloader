@@ -91,8 +91,12 @@ def run(
     if rpm_package_names:
         try:
             from rpm_service import RpmService
-        except ModuleNotFoundError as ex:
-            if ex.name == "solv":
+        except (ModuleNotFoundError, ImportError) as ex:
+            solv_missing = (isinstance(ex, ModuleNotFoundError)
+                            and ex.name == "solv")
+            solv_import_error = (isinstance(ex, ImportError)
+                                 and "solv" in str(ex))
+            if solv_missing or solv_import_error:
                 app_dir = pathlibex.get_app_dir()
                 candidate_paths = [
                     app_dir / "tools" / "bin",
@@ -104,8 +108,11 @@ def run(
                         sys.path.insert(0, candidate_str)
                 try:
                     from rpm_service import RpmService
-                except ModuleNotFoundError as second_ex:
-                    if second_ex.name == "solv":
+                except (ModuleNotFoundError, ImportError) as second_ex:
+                    if (isinstance(second_ex, ModuleNotFoundError)
+                            and second_ex.name
+                            == "solv") or (isinstance(second_ex, ImportError)
+                                           and "solv" in str(second_ex)):
                         raise RuntimeError("RPM機能に必要な 'solv' モジュールが見つかりません。"
                                            " libsolvのWindowsビルド成果物"
                                            "（solv.py / solv.dll / solvext.dll）"
