@@ -2,9 +2,18 @@ name: Build MSIX Package
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to create/update (example: v1.2.3)"
+        required: true
+        type: string
+      release_name:
+        description: "Optional release title"
+        required: false
+        type: string
 
 permissions:
-  contents: read
+  contents: write
 
 # For fork users: To customize the MSIX package identity, set Repository Variables:
 # 1. Go to Settings → Secrets and variables → Actions → Variables tab
@@ -111,5 +120,14 @@ jobs:
         with:
           name: msix-package
           path: |
+            RpmDebDownloader.msix
+            RpmDebDownloader.cer
+
+      - name: Upload assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.release_tag }}
+          name: ${{ github.event.inputs.release_name || github.event.inputs.release_tag }}
+          files: |
             RpmDebDownloader.msix
             RpmDebDownloader.cer
