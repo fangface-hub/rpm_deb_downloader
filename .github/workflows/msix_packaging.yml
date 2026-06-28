@@ -29,26 +29,23 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install PyInstaller
-        run: pip install pyinstaller
-
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
-
-      - name: Build EXE with PyInstaller
-        run: python -m PyInstaller rpm_deb_downloader.spec
-
-      - name: Check bundled solv artifacts
         run: |
-          $recommended = @(
-            "dist\RpmDebDownloader\tools\bin\solv.py",
-            "dist\RpmDebDownloader\tools\bin\solv.dll",
-            "dist\RpmDebDownloader\tools\bin\solvext.dll"
-          )
-          foreach ($path in $recommended) {
-            if (-not (Test-Path $path)) {
-              Write-Warning "Missing optional RPM artifact: $path"
-            }
+          pip install -r requirements.txt
+          pip install -e .[build]
+
+      - name: Install LLVM/Clang
+        run: |
+          choco install llvm --no-progress -y
+          echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
+
+      - name: Build EXE with Nuitka
+        run: powershell -ExecutionPolicy Bypass -File .\build_nuitka.ps1
+
+      - name: Check onefile artifact
+        run: |
+          if (-not (Test-Path "dist\RpmDebDownloader.exe")) {
+            throw "Missing Nuitka onefile artifact: dist\RpmDebDownloader.exe"
           }
 
       - name: Configure MSIX identity
@@ -75,7 +72,8 @@ jobs:
       - name: Prepare MSIX folder structure
         run: |
           mkdir msix
-          Copy-Item dist\RpmDebDownloader msix\RpmDebDownloader -Recurse
+          mkdir msix\RpmDebDownloader
+          Copy-Item dist\RpmDebDownloader.exe msix\RpmDebDownloader\RpmDebDownloader.exe
           Copy-Item AppxManifest.xml msix\
           Copy-Item Square150x150Logo.png msix\
           Copy-Item Square44x44Logo.png msix\

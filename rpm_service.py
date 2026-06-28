@@ -1,15 +1,24 @@
 #!python3
 """RPM package service implementation."""
+import importlib
 import os
-
-import solv
+import sys
 
 from loggingex import generate_logger
 from package_service import (PackageRequest, PackageService, ServiceRepo,
                              ServiceType)
-from pathlibex import ensure_trailing_slash
+from pathlibex import ensure_trailing_slash, get_app_dir
 from rpm_repository_client import RpmRepositoryClient
-from rpm_resolver import RpmResolver
+
+_TOOLS_BIN_DIR = get_app_dir() / "tools" / "bin"
+if _TOOLS_BIN_DIR.exists():
+    _TOOLS_BIN_STR = str(_TOOLS_BIN_DIR)
+    if _TOOLS_BIN_STR not in sys.path:
+        sys.path.insert(0, _TOOLS_BIN_STR)
+
+solv = importlib.import_module("solv")
+rpm_resolver_module = importlib.import_module("rpm_resolver")
+RpmResolver = rpm_resolver_module.RpmResolver
 
 logger = generate_logger(name=__name__, debug=__debug__, filepath=__file__)
 
