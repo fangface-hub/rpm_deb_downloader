@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 # For fork users: To customize the MSIX package identity, set Repository Variables:
 # 1. Go to Settings → Secrets and variables → Actions → Variables tab
@@ -13,10 +13,16 @@ permissions:
 #    - MSIX_IDENTITY_NAME: Your package identity name (e.g., "YourName.RpmDebDownloader")
 #    - MSIX_PUBLISHER_NAME: Your display name (e.g., "YourName")
 # If not set, a random GUID and your GitHub username will be used automatically.
+# Optional Secrets for trusted signing (recommended to reduce antivirus false positives):
+#   - MSIX_SIGN_CERT_BASE64: Base64-encoded PFX certificate
+#   - MSIX_SIGN_CERT_PASSWORD: PFX password
 
 jobs:
   build-msix:
     runs-on: windows-latest
+    env:
+      MSIX_SIGN_CERT_BASE64: ${{ secrets['MSIX_SIGN_CERT_BASE64'] }}
+      MSIX_SIGN_CERT_PASSWORD: ${{ secrets['MSIX_SIGN_CERT_PASSWORD'] }}
 
     steps:
       - name: Checkout
@@ -27,28 +33,28 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
-      - name: Install PyInstaller
-        run: pip install pyinstaller
+      - name: Install uv
+        run: |
+          pip install uv
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
-
-      - name: Build EXE with PyInstaller
-        run: python -m PyInstaller rpm_deb_downloader.spec
-
-      - name: Check bundled solv artifacts
         run: |
-          $recommended = @(
-            "dist\RpmDebDownloader\tools\bin\solv.py",
-            "dist\RpmDebDownloader\tools\bin\solv.dll",
-            "dist\RpmDebDownloader\tools\bin\solvext.dll"
-          )
-          foreach ($path in $recommended) {
-            if (-not (Test-Path $path)) {
-              Write-Warning "Missing optional RPM artifact: $path"
-            }
+          uv sync --extra build
+
+      - name: Install LLVM/Clang
+        run: |
+          choco install llvm --no-progress -y
+          echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
+
+      - name: Build EXE with Nuitka
+        run: powershell -ExecutionPolicy Bypass -File .\build_nuitka.ps1
+
+      - name: Check onefile artifact
+        run: |
+          if (-not (Test-Path "dist\RpmDebDownloader.exe")) {
+            throw "Missing Nuitka onefile artifact: dist\RpmDebDownloader.exe"
           }
 
       - name: Configure MSIX identity
@@ -75,7 +81,8 @@ jobs:
       - name: Prepare MSIX folder structure
         run: |
           mkdir msix
-          Copy-Item dist\RpmDebDownloader msix\RpmDebDownloader -Recurse
+          mkdir msix\RpmDebDownloader
+          Copy-Item dist\RpmDebDownloader.exe msix\RpmDebDownloader\RpmDebDownloader.exe
           Copy-Item AppxManifest.xml msix\
           Copy-Item Square150x150Logo.png msix\
           Copy-Item Square44x44Logo.png msix\
@@ -88,13 +95,25 @@ jobs:
           $makeappx = Join-Path $latest "x64\makeappx.exe"
           & $makeappx pack /d msix /p RpmDebDownloader.msix /o
 
-      - name: Create self-signed certificate
+      - name: Load trusted signing certificate from Secrets (optional)
+        if: ${{ env.MSIX_SIGN_CERT_BASE64 != '' && env.MSIX_SIGN_CERT_PASSWORD != '' }}
         run: |
-          $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=BC42F866-1485-41CB-B9BE-EE450FA32809" -KeyUsage DigitalSignature -FriendlyName "RpmDebDownloader Certificate" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+          [System.IO.File]::WriteAllBytes("$PWD\RpmDebDownloader.pfx", [System.Convert]::FromBase64String("$env:MSIX_SIGN_CERT_BASE64"))
+          $password = ConvertTo-SecureString -String "$env:MSIX_SIGN_CERT_PASSWORD" -Force -AsPlainText
+          $cert = Import-PfxCertificate -FilePath "$PWD\RpmDebDownloader.pfx" -Password $password -CertStoreLocation "Cert:\CurrentUser\My" -Exportable
+          Export-Certificate -Cert $cert -FilePath RpmDebDownloader.cer
+          echo "SIGN_PFX_PATH=$PWD\RpmDebDownloader.pfx" >> $env:GITHUB_ENV
+          echo "CERT_PASSWORD=$env:MSIX_SIGN_CERT_PASSWORD" >> $env:GITHUB_ENV
+
+      - name: Create self-signed certificate
+        if: ${{ env.MSIX_SIGN_CERT_BASE64 == '' || env.MSIX_SIGN_CERT_PASSWORD == '' }}
+        run: |
+          $cert = New-SelfSignedCertificate -Type Custom -Subject "$env:PUBLISHER_CN" -KeyUsage DigitalSignature -FriendlyName "RpmDebDownloader Certificate" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
           $randomPassword = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 32 | % {[char]$_})
           $password = ConvertTo-SecureString -String $randomPassword -Force -AsPlainText
           Export-PfxCertificate -Cert $cert -FilePath RpmDebDownloader.pfx -Password $password
           Export-Certificate -Cert $cert -FilePath RpmDebDownloader.cer
+          echo "SIGN_PFX_PATH=$PWD\RpmDebDownloader.pfx" >> $env:GITHUB_ENV
           echo "CERT_PASSWORD=$randomPassword" >> $env:GITHUB_ENV
 
       - name: Sign MSIX package
@@ -103,12 +122,38 @@ jobs:
           $versions = Get-ChildItem $root | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } | Sort-Object Name -Descending
           $latest = $versions[0].FullName
           $signtool = Join-Path $latest "x64\signtool.exe"
-          & $signtool sign /fd SHA256 /a /f RpmDebDownloader.pfx /p "$env:CERT_PASSWORD" RpmDebDownloader.msix
+          & $signtool sign /fd SHA256 /td SHA256 /tr "http://timestamp.digicert.com" /f "$env:SIGN_PFX_PATH" /p "$env:CERT_PASSWORD" RpmDebDownloader.msix
 
       - name: Upload MSIX
         uses: actions/upload-artifact@v5
         with:
           name: msix-package
           path: |
+            RpmDebDownloader.msix
+            RpmDebDownloader.cer
+
+      - name: Extract version from pyproject.toml
+        id: version
+        run: |
+          $content = Get-Content pyproject.toml -Raw
+          $match = [regex]::Match($content, 'version\s*=\s*"(\d+\.\d+\.\d+)"')
+          if (-not $match.Success) {
+            throw "Failed to parse version from pyproject.toml"
+          }
+
+          $version = $match.Groups[1].Value
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "TAG=v$version" >> $env:GITHUB_OUTPUT
+          echo "NAME=RpmDebDownloader v$version (MSIX)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: ${{ steps.version.outputs.TAG }}
+          draft: false
+          prerelease: true
+          overwrite_files: true
+          files: |
             RpmDebDownloader.msix
             RpmDebDownloader.cer

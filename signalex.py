@@ -70,6 +70,18 @@ def stream_output(pipe, log_func):
         log_func(line.strip())
 
 
+def _hidden_popen_kwargs() -> dict:
+    if sys.platform != "win32":
+        return {}
+
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    return {
+        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        "startupinfo": startupinfo,
+    }
+
+
 def run_command(command: list[str]) -> None:
     """コマンドの実行結果をパイプでログ出力する.
 
@@ -85,8 +97,7 @@ def run_command(command: list[str]) -> None:
                         text=True)
     if sys.platform == "win32":
         # Windowsでウィンドウ非表示
-        popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW",
-                                                0)
+        popen_kwargs.update(_hidden_popen_kwargs())
     process = subprocess.Popen(command, **popen_kwargs)
     subprocess_instances.append(process)  # サブプロセスをリストに追加
 
@@ -164,6 +175,6 @@ def start_subprocess(command: list) -> None:
 
     """
     global subprocess_instances  # pylint: disable=global-variable-not-assigned
-    process = subprocess.Popen(command)
+    process = subprocess.Popen(command, **_hidden_popen_kwargs())
     subprocess_instances.append(process)  # サブプロセスをリストに追加
     logger.info("サブプロセスを開始しました: %s", mask_password_in_command(command))

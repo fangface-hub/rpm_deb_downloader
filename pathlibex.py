@@ -1,6 +1,7 @@
 #!python3
 """Path utilities for application and data directories."""
 
+import json
 import os
 import platform
 import sys
@@ -27,14 +28,23 @@ def get_app_dir() -> Path:
 
     Get application root directory.
 
-    PyInstallerでビルドされた場合は実行ファイルのディレクトリ、
-    開発環境ではスクリプトのディレクトリを返します。
+    PyInstaller/Nuitkaなどでビルドされた場合は実行ファイルの
+    ディレクトリ、開発環境ではスクリプトのディレクトリを返します。
 
     Returns
     -------
     Path
         アプリケーションのルートディレクトリ
     """
+    # 実行時に起動したパスを最優先で確認（Nuitka onefile対策）
+    if sys.argv and sys.argv[0]:
+        launch_path = Path(sys.argv[0]).resolve()
+        if launch_path.suffix.lower() == ".exe":
+            return launch_path.parent
+
+    if '__compiled__' in globals():
+        # Nuitka standalone / onefile フォールバック
+        return Path(sys.executable).resolve().parent
     if getattr(sys, 'frozen', False):
         # PyInstallerでビルドされた場合
         return Path(sys.executable).parent
@@ -43,12 +53,55 @@ def get_app_dir() -> Path:
         return Path(__file__).parent
 
 
+def get_default_data_dir() -> Path:
+    """既定のデータディレクトリを取得する."""
+    if platform.system() == "Windows":
+        userprofile = os.getenv("USERPROFILE")
+        if userprofile:
+            return Path(userprofile) / "Documents" / "RpmDebDownloader"
+        return Path.home() / "Documents" / "RpmDebDownloader"
+
+    if platform.system() == "Darwin":
+        return (Path.home() / "Library" / "Application Support" /
+                "RpmDebDownloader")
+
+    return (Path(os.getenv("XDG_DATA_HOME",
+                           Path.home() / ".local" / "share")) /
+            "RpmDebDownloader")
+
+
+def get_legacy_data_dir() -> Path:
+    """旧Windows既定のデータディレクトリを取得する."""
+    if platform.system() == "Windows":
+        return (Path(os.getenv("LOCALAPPDATA", os.path.expanduser("~"))) /
+                "RpmDebDownloader")
+    return get_default_data_dir()
+
+
+def get_settings_file_path() -> Path:
+    """設定ファイルの固定保存先を取得する."""
+    return get_default_data_dir() / "settings.json"
+
+
+def get_existing_settings_file_path() -> Path:
+    """存在する設定ファイルを取得する."""
+    settings_file = get_settings_file_path()
+    if settings_file.exists():
+        return settings_file
+
+    legacy_settings = get_legacy_data_dir() / "settings.json"
+    if legacy_settings.exists():
+        return legacy_settings
+
+    return settings_file
+
+
 def get_data_dir() -> Path:
     """データディレクトリを取得 / Get data directory.
 
     プラットフォームごとに適切な場所を返します。
     Returns appropriate location for each platform:
-    - Windows: %LOCALAPPDATA%\\RpmDebDownloader
+    - Windows: %USERPROFILE%\\Documents\\RpmDebDownloader
     - macOS: ~/Library/Application Support/RpmDebDownloader
     - Linux: ~/.local/share/RpmDebDownloader (XDG Base Directory)
 
@@ -58,17 +111,20 @@ def get_data_dir() -> Path:
         データディレクトリ / Data directory path
     """
     if platform.system() == "Windows":
-        return Path(os.getenv("LOCALAPPDATA",
-                              os.path.expanduser("~"))) / "RpmDebDownloader"
+        settings_file = get_settings_file_path()
+        if settings_file.exists():
+            try:
+                with open(settings_file, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+                data_dir = settings.get("data_dir")
+                if isinstance(data_dir, str) and data_dir.strip():
+                    return Path(data_dir.strip())
+            except (OSError, json.JSONDecodeError, TypeError, ValueError):
+                pass
 
-    if platform.system() == "Darwin":
-        return Path.home(
-        ) / "Library" / "Application Support" / "RpmDebDownloader"
+        return get_default_data_dir()
 
-    # Linux and other Unix-like systems
-    return Path(os.getenv(
-        "XDG_DATA_HOME",
-        Path.home() / ".local" / "share")) / "RpmDebDownloader"
+    return get_default_data_dir()
 
 
 def get_documents_dir() -> Path:
